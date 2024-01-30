@@ -1,0 +1,11 @@
+@baseUrl = "http://localhost:3002"
+@urlPath = api/v1/quiz/quiz
+
+POST {{baseUrl}}/{{urlPath}}
+Content-Type: application/json
+Accept: application/json
+withCredentials: true
+
+{
+    "prompt" : "Music"
+}
