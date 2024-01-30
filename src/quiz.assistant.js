@@ -6,7 +6,6 @@ const openai = new OpenAI({
 });
 
 const createQuiz = async (category) => {
-  console.log('category', category);
 	try {
     const completion =  await openai.chat.completions.create({
         messages: [
