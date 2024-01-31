@@ -21,31 +21,31 @@ const mockQuiz = {
         category: 'movies',
         question: "Who directed the movie 'Inception'?",
         answers: [ 'Christopher Nolan', 'Steven Spielberg', 'Quentin Tarantino' ],
-        correct_answer: 'Christopher Nolan'
+        correctAnswer: 'Christopher Nolan'
       },
       {
         category: 'movies',
         question: "Which actor played the lead role in the movie 'The Shawshank Redemption'?",
         answers: [ 'Tom Hanks', 'Morgan Freeman', 'Tim Robbins' ],
-        correct_answer: 'Tim Robbins'
+        correctAnswer: 'Tim Robbins'
       },
       {
         category: 'movies',
         question: 'What is the highest-grossing animated movie of all time?',
         answers: [ 'Finding Nemo', 'Toy Story 3', 'Frozen' ],
-        correct_answer: 'Frozen'
+        correctAnswer: 'Frozen'
       },
       {
         category: 'movies',
         question: 'Which movie won the Academy Award for Best Picture in 2019?',
         answers: [ 'Black Panther', 'Green Book', 'Bohemian Rhapsody' ],
-        correct_answer: 'Green Book'
+        correctAnswer: 'Green Book'
       },
       {
         category: 'movies',
         question: 'Who played the role of Tony Stark in the Marvel Cinematic Universe?',
         answers: [ 'Robert Downey Jr.', 'Chris Hemsworth', 'Mark Ruffalo' ],
-        correct_answer: 'Robert Downey Jr.'
+        correctAnswer: 'Robert Downey Jr.'
       }
     ]
   }
@@ -66,12 +66,23 @@ io.on('connection', (socket) => {
         global.io.emit('newUserResponse', users);
     });
     
-    socket.on('initiateQuiz', async (data) => {
-        console.log('data', {data});
-        const response = await createQuiz(data?.text);
-        global.io.emit('newQuiz', {
-            quiz: response.quiz
-        });
+	socket.on('initiateQuiz', async (data) => {
+		await new Promise(resolve => setTimeout(() => {
+			global.io.emit('messageResponse', {
+				text: `Jaså, ni vill köra på kategorin ${data?.text}. Ha tålamod, quiz på väg!`, 
+				name: "Quizmaestro", 
+				id: `${Math.random()}`,
+				socketID: `${Math.random()}`,
+				role: "admin",
+				type: "message",
+			});
+			resolve();
+		}, 1000))
+        
+		const response = await createQuiz(data?.text);
+		global.io.emit('newQuiz', {
+				quiz: response.quiz
+		});
     });
 
     socket.on('quizFinished', (data) => {
