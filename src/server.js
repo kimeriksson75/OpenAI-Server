@@ -52,12 +52,40 @@ const mockQuiz = {
 global.io = io;
 
 let users = [];
+let quizInitiator = null;
+let categoryInitiated = false;
 io.on('connection', (socket) => {
     logger.info(`⚡: ${socket.id} user just connected!`);
 
     socket.on('typing', (data) => socket.broadcast.emit('typingResponse', data));
 
-    socket.on('message', (data) => {
+	socket.on('message', async (data) => {
+		const { role, type, socketID } = data;
+		if (categoryInitiated && quizInitiator === socketID) {
+			quizInitiator = null;
+			categoryInitiated = false;
+			await new Promise(resolve => setTimeout(() => {
+				global.io.emit('messageResponse', {
+					text: `Jaså ${data?.name}, du vill köra på kategorin ${data?.text}. Ha tålamod, quiz på väg!`, 
+					name: "Quizmaestro", 
+					id: `${Math.random()}`,
+					socketID: `${Math.random()}`,
+					role: "admin",
+					type: "message",
+				});
+				resolve();
+			}, 1000))
+					
+			const response = await createQuiz(data?.text);
+			global.io.emit('newQuiz', {
+					quiz: response.quiz
+			});
+			return;
+		}
+		if (role === 'admin' && type === 'initiateQuiz') {
+			categoryInitiated = true;
+			quizInitiator = socketID;
+		}
         global.io.emit('messageResponse', data);
     });
 
@@ -66,24 +94,24 @@ io.on('connection', (socket) => {
         global.io.emit('newUserResponse', users);
     });
     
-	socket.on('initiateQuiz', async (data) => {
-		await new Promise(resolve => setTimeout(() => {
-			global.io.emit('messageResponse', {
-				text: `Jaså, ni vill köra på kategorin ${data?.text}. Ha tålamod, quiz på väg!`, 
-				name: "Quizmaestro", 
-				id: `${Math.random()}`,
-				socketID: `${Math.random()}`,
-				role: "admin",
-				type: "message",
-			});
-			resolve();
-		}, 1000))
+	// socket.on('initiateQuiz', async (data) => {
+	// 	await new Promise(resolve => setTimeout(() => {
+	// 		global.io.emit('messageResponse', {
+	// 			text: `Jaså, ni vill köra på kategorin ${data?.text}. Ha tålamod, quiz på väg!`, 
+	// 			name: "Quizmaestro", 
+	// 			id: `${Math.random()}`,
+	// 			socketID: `${Math.random()}`,
+	// 			role: "admin",
+	// 			type: "message",
+	// 		});
+	// 		resolve();
+	// 	}, 1000))
         
-		const response = await createQuiz(data?.text);
-		global.io.emit('newQuiz', {
-				quiz: response.quiz
-		});
-    });
+	// 	// const response = await createQuiz(data?.text);
+	// 	global.io.emit('newQuiz', {
+	// 			quiz: mockQuiz.quiz
+	// 	});
+	// });
 
     socket.on('quizFinished', (data) => {
         const { name, result, id } = data;
