@@ -2,6 +2,7 @@ const http = require('http');
 const logger = require('pino')();
 const app = require('./app');
 const { createQuiz } = require('./quiz.assistant');
+const { generateRandomName } = require('./random-name.assistant');
 
 const { PORT } = require('./config');
 const { Server } = require("socket.io");
@@ -52,15 +53,39 @@ const mockQuiz = {
 global.io = io;
 
 let users = [];
+let usersRoom = [];
 let quizInitiator = null;
 let categoryInitiated = false;
 io.on('connection', (socket) => {
-    logger.info(`⚡: ${socket.id} user just connected!`);
 
-    socket.on('typing', (data) => socket.broadcast.emit('typingResponse', data));
+	socket.on('join', (data) => {
+		const { room, name } = data;
+		socket.join(room);
+		users.push(data);
+		const usersInRoom = users.filter((user) => user.room === room);
+		global.io.to(room).emit('newUserResponse', usersInRoom);
+		logger.info(`⚡: ${name} just joined room ${room}`);
+	});
+
+	socket.on('leave', (data) => {
+		const { room, name } = data;
+		socket.leave(room);
+		users = users.filter((user) => user.room !== room);
+		const usersInRoom = users.filter((user) => user.room === room);
+		global.io.to(room).emit('newUserResponse', usersInRoom);
+		logger.info(`⚡: ${name} just left room ${room}`);
+	});
+
+
+	logger.info(`⚡: ${socket.id} user just connected!`);
+
+	socket.on('typing', (data) => {
+		const { room } = data;
+		socket.broadcast.to(room).emit('typingResponse', data);
+	});
 
 	socket.on('message', async (data) => {
-		const { role, type, socketID } = data;
+		const { role, type, socketID, room } = data;
 		if (categoryInitiated && quizInitiator === socketID) {
 			quizInitiator = null;
 			categoryInitiated = false;
@@ -77,7 +102,7 @@ io.on('connection', (socket) => {
 			}, 1000))
 					
 			const response = await createQuiz(data?.text);
-			global.io.emit('newQuiz', {
+			global.io.to(room).emit('newQuiz', {
 					quiz: response.quiz
 			});
 			return;
@@ -86,45 +111,33 @@ io.on('connection', (socket) => {
 			categoryInitiated = true;
 			quizInitiator = socketID;
 		}
-        global.io.emit('messageResponse', data);
-    });
+		global.io.to(room).emit('messageResponse', data);
+	});
 
-    socket.on('newUser', (data) => {
-        users.push(data);
-        global.io.emit('newUserResponse', users);
-    });
-    
-	// socket.on('initiateQuiz', async (data) => {
-	// 	await new Promise(resolve => setTimeout(() => {
-	// 		global.io.emit('messageResponse', {
-	// 			text: `Jaså, ni vill köra på kategorin ${data?.text}. Ha tålamod, quiz på väg!`, 
-	// 			name: "Quizmaestro", 
-	// 			id: `${Math.random()}`,
-	// 			socketID: `${Math.random()}`,
-	// 			role: "admin",
-	// 			type: "message",
-	// 		});
-	// 		resolve();
-	// 	}, 1000))
-        
-	// 	// const response = await createQuiz(data?.text);
-	// 	global.io.emit('newQuiz', {
-	// 			quiz: mockQuiz.quiz
-	// 	});
-	// });
+	socket.on('newUser', (data) => {
+		const { room } = data;
+		users.push(data);
+		console.log('newUser', [users])
+		global.io.to(room).emit('newUserResponse', users);
+	});
 
-    socket.on('quizFinished', (data) => {
-        const { name, result, id } = data;
-        const text = `${name} är klar med quizzen och fick ${result.correctAnswers} poäng!`;
-        global.io.emit('messageResponse', {...data, text });
-    });
+	socket.on('quizFinished', (data) => {
+			const { name, result, id, room } = data;
+			const text = `${name} är klar med quizzen och fick ${result.correctAnswers} poäng!`;
+			global.io.to(room).emit('messageResponse', {...data, text });
+	});
+	
+	socket.on('generateRandomName', async () => {
+		const response = await generateRandomName();
+		global.io.emit('generateRandomNameResponse', response);
+	});
 
-    socket.on('disconnect', () => {
-        logger.info('🔥: A user disconnected');
-        users = users.filter((user) => user.socketID !== socket.id);
-        global.io.emit('newUserResponse', users);
-        socket.disconnect();
-    });
+	socket.on('disconnect', () => {
+		logger.info('🔥: A user disconnected');
+		users = users.filter((user) => user.socketID !== socket.id);
+		global.io.emit('newUserResponse', users);
+		socket.disconnect();
+	});
 });
 
 httpServer.listen(PORT, () => {
