@@ -68,9 +68,9 @@ io.on('connection', (socket) => {
 	});
 
 	socket.on('leave', (data) => {
-		const { room, name } = data;
+		const { room, name, socketID } = data;
 		socket.leave(room);
-		users = users.filter((user) => user.room !== room);
+		users = users.filter((user) =>  user.socketID !== socketID);	
 		const usersInRoom = users.filter((user) => user.room === room);
 		global.io.to(room).emit('newUserResponse', usersInRoom);
 		logger.info(`⚡: ${name} just left room ${room}`);
