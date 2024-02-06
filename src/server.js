@@ -105,7 +105,7 @@ io.on('connection', (socket) => {
 
 	socket.on('typing', (data) => {
 		const { room } = data;
-		global.io.to(room).emit('typingResponse', data.message);
+		socket.broadcast.to(room).emit('typingResponse', data.message);
 	});
 
 	socket.on('message', async (data) => {
