@@ -53,8 +53,8 @@ const mockQuiz = {
 global.io = io;
 
 const initQuiz = async (category, socket, room) => { 
-	// const response = await createQuiz(category);
-	const currentQuiz = new Quiz(mockQuiz.quiz, socket);
+	const response = await createQuiz(category);
+	const currentQuiz = new Quiz(response.quiz, socket);
 	currentQuiz.initQuiz(room);
 	quizzes.push(currentQuiz);
 	await new Promise(resolve => setTimeout(() => resolve(), 1000))
