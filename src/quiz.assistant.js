@@ -27,6 +27,28 @@ const createQuiz = async (category) => {
 	return null;
 }
 
+const summarizeQuizResult = async (summaryData) => {
+  try {
+    const completion =  await openai.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant designed to output JSON. Please output in desired language swedish.",
+          },
+          { role: "user", content: `Create an hilarious summary from the quiz on the category ${summaryData.category} with the a maximum points of ${summaryData.maxPoints} that has the following result: ${summaryData.quizResults.map(res => `name: ${res.name} correctAnswers: ${res.correctAnswers} averageResponseTime: ${res.averageUserResponseTime}`)}. Lift up the winner and be super condescending to looser. Use lots of emojis. Be poetic. Use strong swedish words! Please return the summary as string named summary.` },
+        ],
+        model: "gpt-3.5-turbo-1106",
+        response_format: { type: "json_object" },
+    });
+    const json = await JSON.parse(completion.choices[0].message.content)
+    return json;
+  } catch (error) {
+    logger.error(error);
+  }
+  return null;
+}
+
 module.exports = {
-    createQuiz,
+  createQuiz,
+  summarizeQuizResult,
 };

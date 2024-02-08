@@ -1,7 +1,7 @@
 const http = require('http');
 const logger = require('pino')();
 const app = require('./app');
-const { createQuiz } = require('./quiz.assistant');
+const { createQuiz, summarizeQuizResult } = require('./quiz.assistant');
 const { generateRandomName } = require('./random-name.assistant');
 const Quiz = require('./quiz');
 const { PORT } = require('./config');
@@ -42,18 +42,18 @@ const mockQuiz = {
         answers: [ 'Finding Nemo', 'Toy Story 3', 'Frozen' ],
         correctAnswer: 'Frozen'
       },
-      {
-        category: 'movies',
-        question: 'Which movie won the Academy Award for Best Picture in 2019?',
-        answers: [ 'Black Panther', 'Green Book', 'Bohemian Rhapsody' ],
-        correctAnswer: 'Green Book'
-      },
-      {
-        category: 'movies',
-        question: 'Who played the role of Tony Stark in the Marvel Cinematic Universe?',
-        answers: [ 'Robert Downey Jr.', 'Chris Hemsworth', 'Mark Ruffalo' ],
-        correctAnswer: 'Robert Downey Jr.'
-      }
+      // {
+      //   category: 'movies',
+      //   question: 'Which movie won the Academy Award for Best Picture in 2019?',
+      //   answers: [ 'Black Panther', 'Green Book', 'Bohemian Rhapsody' ],
+      //   correctAnswer: 'Green Book'
+      // },
+      // {
+      //   category: 'movies',
+      //   question: 'Who played the role of Tony Stark in the Marvel Cinematic Universe?',
+      //   answers: [ 'Robert Downey Jr.', 'Chris Hemsworth', 'Mark Ruffalo' ],
+      //   correctAnswer: 'Robert Downey Jr.'
+      // }
     ]
   }
 global.io = io;
@@ -78,10 +78,10 @@ const initQuiz = async (category, socket, room) => {
 	});
 };
 
-
 let users = [];
 let quizInitiator = null;
 let quizzes = [];
+let finishedQuizzesResults = [];
 let categoryInitiated = false;
 
 io.on('connection', (socket) => {
@@ -173,8 +173,17 @@ io.on('connection', (socket) => {
 		currentQuiz?.onAnswer(data);
 	});
 
-	socket.on('quizFinished', (data) => {
+	socket.on('quizFinished', async (data) => {
 		const { name, result, id, room } = data;
+		// const currentQuiz = quizzes.find((quiz) => quiz.getRoom() === room);
+
+		finishedQuizzesResults.push({
+			// category: currentQuiz.quizData[0].category,
+			name,
+			correctAnswers: result.correctAnswers,
+			averageUserResponseTime: result.averageUserResponseTime,
+			room,
+		});
 		const responseEndPhrase = {
 			0: 'Mina kondoleanser! 😢😢😢',
 			1: 'Det måste vara uppkopplingen som strular! 🤔🤔🤔',
@@ -184,7 +193,29 @@ io.on('connection', (socket) => {
 			5: 'I brist på bättre ord: PERFEKT! 🤩🤩🤩'
 		};
 			const text = `${name} är klar med quizzen med en genomsnittlig svarstid på ${Math.round(result.averageUserResponseTime * 10) / 10}s och skrapade ihop ${result.correctAnswers} ${result.correctAnswers === 1 ? 'rätt' : 'rätta'} svar. ${responseEndPhrase[result.correctAnswers]}`;
-			global.io.to(room).emit('messageResponse', {...data, text });
+		global.io.to(room).emit('messageResponse', { ...data, text });
+		
+		if (finishedQuizzesResults.length === users.filter((user) => user.room === room).length) {
+			const quizResults = finishedQuizzesResults.filter((result) => result.room === room);
+			const category = result.category;
+			const maxPoints = result.maxPoints;
+			const summaryData = {
+				quizResults,
+				category,
+				maxPoints
+			};
+			const response = await summarizeQuizResult(summaryData);
+			global.io.emit('messageResponse', {
+				text: response?.summary, 
+				name: "Quizmaestro", 
+				id: `${Math.random()}`,
+				socketID: `${Math.random()}`,
+				role: "admin",
+				type: "message",
+			});
+			finishedQuizzesResults = [];
+		}
+
 	});
 	
 	socket.on('generateRandomName', async () => {

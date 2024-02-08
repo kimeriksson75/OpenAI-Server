@@ -11,6 +11,9 @@ class Quiz extends Event.EventEmitter {
 	getRoom() {
 		return this.room;
 	}
+	getQuizData() {
+		return this.quizData;
+	}
 	initQuiz(room) {
 		this.room = room;
 		global.io.to(room).emit('newQuiz', {
@@ -26,7 +29,6 @@ class Quiz extends Event.EventEmitter {
 		global.io.to(this.room).emit('answerResponse', data);
 
 		this.usersAnswered.add(data);
-
 		// Store the answer in the quizAnswers object
 		if (!this.quizAnswers[this.currentQuestionIndex]) {
 			this.quizAnswers[this.currentQuestionIndex] = [];
@@ -48,8 +50,9 @@ class Quiz extends Event.EventEmitter {
 	}
 	summarizeQuiz() {
 		const summary = this.quizData.map((question, index) => {
+			const correctAnswer = question.correctAnswer;
 			const answers = this.quizAnswers[index];
-			const correctAnswer = question.correct_answer;
+			
 			const correct = answers.includes(correctAnswer);
 			return {
 				question: question.question,
@@ -58,6 +61,8 @@ class Quiz extends Event.EventEmitter {
 				correct
 			};
 		});
+
+		console.dir(summary, { depth: null });
 		this.emit('quizSummary', summary);
 		this.terminateQuiz();
 
