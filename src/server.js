@@ -14,7 +14,13 @@ const io = new Server(httpServer, {
         origin: "*",
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
         allowedHeaders: ["Content-Type", "Authorization"],
-    }
+	},
+	connectionStateRecovery: {
+		// the backup duration of the sessions and the packets
+		maxDisconnectionDuration: 2 * 60 * 1000,
+		// whether to skip middlewares upon successful recovery
+		skipMiddlewares: true,
+	  },	
 });
 const mockQuiz = {
     quiz: [
@@ -57,11 +63,10 @@ const initQuiz = async (category, socket, room) => {
 	const currentQuiz = new Quiz(response.quiz, socket);
 	currentQuiz.initQuiz(room);
 	quizzes.push(currentQuiz);
+	
 	await new Promise(resolve => setTimeout(() => resolve(), 1000))
+	
 	currentQuiz.startQuiz(room);
-	// global.io.to(room).emit('newQuiz', {
-	// 	quiz: response.quiz
-	// });
 	currentQuiz.on('quizSummary', (summary) => {
 		console.log('quizSummary has been emitted', { summary });
 		
@@ -75,33 +80,53 @@ const initQuiz = async (category, socket, room) => {
 
 
 let users = [];
-let usersRoom = [];
 let quizInitiator = null;
 let quizzes = [];
 let categoryInitiated = false;
 
 io.on('connection', (socket) => {
+	logger.info(`⚡: ${socket.id} user just connected!`);
 
+	if (socket.recovered) {
+		// socket.emit('recovered', socket);
+	} else {
+	// new or unrecoverable session
+	}
 	socket.on('join', (data) => {
-		const { room, name } = data;
+		const { room, name, socketID } = data;
+		const rejoiningUser = users.find((user) => user.socketID === socketID);
+		if (!rejoiningUser) {
+			users.push(data);
+		}
 		socket.join(room);
-		users.push(data);
 		const usersInRoom = users.filter((user) => user.room === room);
 		global.io.to(room).emit('newUserResponse', usersInRoom);
 		logger.info(`⚡: ${name} just joined room ${room}`);
 	});
 
-	socket.on('leave', (data) => {
-		const { room, name, socketID } = data;
-		socket.leave(room);
-		users = users.filter((user) =>  user.socketID !== socketID);	
-		const usersInRoom = users.filter((user) => user.room === room);
-		global.io.to(room).emit('newUserResponse', usersInRoom);
-		logger.info(`⚡: ${name} just left room ${room}`);
+	socket.on('reconnect', (data) => {
+		logger.info('🔥: A user reconnected');
 	});
 
+	socket.on('disconnect', (data) => {
+		logger.info('🔥: A user disconnected');
+		const { room, name, socketID } = data;
+		users = users.filter((user) =>  user.socketID !== socketID);	
+		const usersInRoom = users.filter((user) => user.room === room);
+		socket.leave(room);
+		global.io.to(room).emit('newUserResponse', usersInRoom);
+		socket.disconnect();
+	});
 
-	logger.info(`⚡: ${socket.id} user just connected!`);
+	socket.on('leave', (data) => {
+		const { room, name, socketID } = data;
+		logger.info(`🔥: ${name} just left room ${room}`);
+		users = users.filter((user) => user.socketID !== socketID);	
+		const usersInRoom = users.filter((user) => user.room === room);
+		global.io.to(room).emit('newUserResponse', usersInRoom);
+		socket.leave(room);
+		socket.disconnect();
+	});
 
 	socket.on('typing', (data) => {
 		const { room } = data;
@@ -139,16 +164,12 @@ io.on('connection', (socket) => {
 	socket.on('newUser', (data) => {
 		const { room } = data;
 		users.push(data);
-		// console.log('newUser', [users])
 		global.io.to(room).emit('newUserResponse', users);
 	});
 
 	socket.on('answer', (data) => {
-		console.log('answer', data);
 		const { room } = data;
 		const currentQuiz = quizzes.find((quiz) => quiz.getRoom() === room);
-		// console.log('quizzes', [quizzes]);
-		// console.log('currentQuiz', currentQuiz);
 		currentQuiz?.onAnswer(data);
 	});
 
@@ -171,12 +192,7 @@ io.on('connection', (socket) => {
 		global.io.emit('generateRandomNameResponse', response);
 	});
 
-	socket.on('disconnect', () => {
-		logger.info('🔥: A user disconnected');
-		users = users.filter((user) => user.socketID !== socket.id);
-		global.io.emit('newUserResponse', users);
-		socket.disconnect();
-	});
+	
 });
 
 httpServer.listen(PORT, () => {
