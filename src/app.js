@@ -9,6 +9,8 @@ const { spawn } = require("child_process");
 
 const { PORT, API_VERSION } = require("./config");
 const errorHandler = require("./helpers/error-handler");
+const timeoutHandler = require("./helpers/timeout-handler");
+const generateImageSchema = require("./utils/validation/generate-image.schema");
 app.use(helmet());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
@@ -23,9 +25,14 @@ app.use(
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(`/api/${API_VERSION}`, require("./api/v1"));
-app.get("/generate", (req, res) => {
+app.get("/generate", (req, res, next) => {
   const { prompt } = req.query;
   try {
+    // Validate the request query parameters
+    const { error } = generateImageSchema.validate({ prompt });
+    if (error) {
+      throw new Error(error.details[0].message);
+    }
     // Start the image resizing task in a separate worker process
     const childProcess = spawn("node", ["./src/generateImage.js", prompt]);
 
@@ -34,9 +41,9 @@ app.get("/generate", (req, res) => {
       res.status(200).json({ image: url.toString() });
       //   io.emit("resizedImage", { message: data.toString() });
     });
-
-    childProcess.stderr.on("data", (data) => {
-      console.error(`Worker error: ${data}`);
+    childProcess.on("error", (err) => {
+      console.error(`Worker error: ${err}`);
+      throw new Error(err);
     });
 
     childProcess.on("close", (code) => {
@@ -45,15 +52,12 @@ app.get("/generate", (req, res) => {
 
     // res.send("Image resizing task started.");
   } catch (error) {
-    console.error("Error occurred during the task:", error);
-    res.status(500).send("Internal Server Error");
+    next(error);
   }
 });
 
 // Handle timeout errors
-app.use((req, res, next) => {
-  if (!req.timedout) next();
-});
+app.use(timeoutHandler);
 app.use(errorHandler);
 
 module.exports = app;

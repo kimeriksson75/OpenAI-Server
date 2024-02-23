@@ -23,7 +23,7 @@ async function main() {
       process.stdout.write(secure_url);
     }
   } catch (err) {
-    console.error(err);
+    throw new Error(err);
   }
 }
 
