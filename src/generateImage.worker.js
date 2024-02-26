@@ -1,3 +1,4 @@
+const { parentPort, workerData } = require("worker_threads");
 require("dotenv").config();
 const OpenAI = require("openai");
 const { OPENAI_API_KEY } = require("./config");
@@ -9,7 +10,7 @@ const openai = new OpenAI({
 
 async function main() {
   try {
-    const prompt = process.argv[2];
+    const prompt = workerData.prompt;
     const response = await openai.images.generate({
       model: "dall-e-3",
       prompt,
@@ -17,13 +18,20 @@ async function main() {
       size: "1024x1024",
     });
     if (response.data[0]) {
-      const { url } = response?.data[0];
+      const { url, revised_prompt } = response?.data[0];
       const uploaded = await upload(url);
       const { secure_url = null } = uploaded;
-      process.stdout.write(secure_url);
+      data = {
+        ...workerData,
+        secure_url,
+        revised_prompt,
+      };
+
+      parentPort.postMessage(data);
     }
   } catch (err) {
     console.error(err);
+    parentPort.postMessage({ error: err });
   }
 }
 

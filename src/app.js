@@ -11,10 +11,11 @@ const { PORT, API_VERSION } = require("./config");
 const errorHandler = require("./helpers/error-handler");
 const timeoutHandler = require("./helpers/timeout-handler");
 const generateImageSchema = require("./utils/validation/generate-image.schema");
+const initiateImageWorker = require("./initiateImageWorker");
 app.use(helmet());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(timeout("20s"));
+app.use(timeout("5s"));
 app.use(
   cors({
     origin: "*",
@@ -33,26 +34,12 @@ app.get("/generate", (req, res, next) => {
     if (error) {
       throw new Error(error.details[0].message);
     }
-    // Start the image resizing task in a separate worker process
-    const childProcess = spawn("node", ["./src/generateImage.js", prompt]);
-
-    childProcess.stdout.on("data", (url) => {
-      console.log(`Worker output: ${url}`);
-      res.status(200).json({ image: url.toString() });
-      //   io.emit("resizedImage", { message: data.toString() });
-    });
-    childProcess.on("error", (err) => {
-      console.error(`Worker error: ${err}`);
-      throw new Error(err);
-    });
-
-    childProcess.on("close", (code) => {
-      console.log(`Worker process exited with code ${code}`);
-    });
-
-    // res.send("Image resizing task started.");
+    // Initiate the image generation worker
+    initiateImageWorker(prompt);
+    res.status(200).json({ message: "Image generation started" });
   } catch (error) {
     next(error);
+    logger.error({ statusCode: 500, message: error });
   }
 });
 
